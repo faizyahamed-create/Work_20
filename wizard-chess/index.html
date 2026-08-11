@@ -1,27 +1,116 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wizard Chess</title>
-<style>html,body{margin:0;height:100%;overflow:hidden;background:#080511;color:#eee;font-family:Georgia,serif}#app{position:fixed;inset:0}canvas{display:block}.hud{position:fixed;top:20px;left:20px;z-index:2;padding:16px 20px;border:1px solid #8064a9;border-radius:12px;background:rgba(12,7,24,.82);backdrop-filter:blur(8px);box-shadow:0 0 30px rgba(123,75,180,.25)}h1{margin:0 0 6px;font-size:26px}.status{font-family:system-ui,sans-serif;font-size:14px;color:#cfc3e8}.hint{margin-top:8px;font-size:12px;color:#9f91b8}button{margin-top:10px;padding:8px 12px;border:1px solid #8f6bc1;border-radius:8px;background:#25153c;color:#fff;cursor:pointer}</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wizard Chess — Human vs CPU</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#07040d;color:#eee;font-family:Georgia,serif}#app{position:fixed;inset:0}canvas{display:block}
+.hud{position:fixed;top:18px;left:18px;z-index:5;width:285px;padding:17px 19px;border:1px solid #8064a9;border-radius:14px;background:rgba(10,6,20,.88);backdrop-filter:blur(10px);box-shadow:0 0 35px rgba(123,75,180,.28)}
+h1{margin:0 0 5px;font-size:27px;letter-spacing:1px}.sub{font-family:system-ui,sans-serif;font-size:12px;color:#a99abb;margin-bottom:12px}.status{font-family:system-ui,sans-serif;font-size:14px;color:#eadff5;min-height:20px}.hint{margin-top:8px;font:12px system-ui,sans-serif;color:#a99abb;line-height:1.45}
+.controls{display:flex;gap:8px;align-items:center;margin-top:12px}.controls label{font:12px system-ui,sans-serif;color:#cfc3e8}.controls select,button{padding:8px 10px;border:1px solid #8f6bc1;border-radius:8px;background:#25153c;color:#fff;font:13px system-ui,sans-serif}button{cursor:pointer}button:hover{background:#35204f}.move{margin-top:9px;font:12px system-ui,sans-serif;color:#c8b8d9}.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#3b2455;color:#e7d5ff;font:11px system-ui,sans-serif;margin-top:6px}
+#thinking{display:none;margin-top:8px;color:#d8baff;font:12px system-ui,sans-serif}.legend{position:fixed;right:18px;bottom:16px;z-index:5;font:11px system-ui,sans-serif;color:#9686a9;background:rgba(8,4,14,.7);padding:8px 10px;border-radius:8px}
+</style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js"}}</script>
-</head><body><div id="app"></div><div class="hud"><h1>Wizard Chess</h1><div id="status" class="status">Loading 3D board…</div><div class="hint">Drag to orbit • Scroll to zoom • Click a piece</div><button id="reset">Reset Game</button></div>
+</head>
+<body>
+<div id="app"></div>
+<div class="hud">
+<h1>Wizard Chess</h1><div class="sub">You are the White wizard • Black is the CPU</div>
+<div id="status" class="status">Preparing the magical board…</div>
+<div class="controls"><label for="difficulty">CPU</label><select id="difficulty"><option value="amateur">Amateur</option><option value="professional" selected>Professional</option><option value="expert">Expert</option></select><button id="reset">New Game</button></div>
+<div id="thinking">🪄 The dark wizard is thinking…</div><div id="lastMove" class="move"></div><div id="quality" class="badge" style="display:none"></div>
+<div class="hint">Click a wizard, then click its destination. Drag to orbit • Scroll to zoom.</div>
+</div>
+<div class="legend">⚪ White wizard army &nbsp; ⚫ Dark wizard army</div>
 <script type="module">
 import * as THREE from 'three';
 import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/controls/OrbitControls.js';
-const statusEl=document.getElementById('status'),app=document.getElementById('app');
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x080511);scene.fog=new THREE.Fog(0x080511,16,32);
-const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,.1,100);camera.position.set(0,12,13);
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;app.appendChild(renderer.domElement);
-const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,0,0);controls.enableDamping=true;controls.minDistance=9;controls.maxDistance=22;
-scene.add(new THREE.HemisphereLight(0x8870b0,0x17101e,2));const key=new THREE.DirectionalLight(0xffe6c0,4);key.position.set(5,12,6);key.castShadow=true;scene.add(key);
-const square=1.15,board=new THREE.Group();scene.add(board);
-for(let z=0;z<8;z++)for(let x=0;x<8;x++){const s=new THREE.Mesh(new THREE.BoxGeometry(square,.25,square),new THREE.MeshStandardMaterial({color:(x+z)%2?0x2b1d39:0xb8a0ce,roughness:.75}));s.position.set((x-3.5)*square,0,(z-3.5)*square);s.receiveShadow=true;s.userData={x,z};board.add(s)}
-const base=new THREE.Mesh(new THREE.BoxGeometry(10.2,.6,10.2),new THREE.MeshStandardMaterial({color:0x120b19,metalness:.4,roughness:.45}));base.position.y=-.4;base.receiveShadow=true;scene.add(base);
-const pieces=new THREE.Group();scene.add(pieces);const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();let selected=null,turn='w';const glyph={p:'♟',r:'♜',n:'♞',b:'♝',q:'♛',k:'♚'};
-function pieceMesh(type,color,x,z){const group=new THREE.Group(),mat=new THREE.MeshStandardMaterial({color,metalness:.25,roughness:.35,emissive:color,emissiveIntensity:.05});const body=new THREE.Mesh(new THREE.CylinderGeometry(.28,.38,.7,24),mat);body.position.y=.5;body.castShadow=true;group.add(body);const head=new THREE.Mesh(new THREE.SphereGeometry(.3,24,16),mat);head.position.y=.98;head.castShadow=true;group.add(head);const label=document.createElement('canvas');label.width=128;label.height=128;const ctx=label.getContext('2d');ctx.fillStyle='#fff';ctx.font='92px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(glyph[type],64,64);const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(label),transparent:true}));sprite.scale.set(.8,.8,1);sprite.position.y=1.65;group.add(sprite);group.position.set((x-3.5)*square,.05,(z-3.5)*square);group.userData={type,colorSide:color===0xf1dfbd?'w':'b',x,z};pieces.add(group)}
-function setup(){while(pieces.children.length)pieces.remove(pieces.children[0]);const order=['r','n','b','q','k','b','n','r'];for(let x=0;x<8;x++){pieceMesh(order[x],0xf1dfbd,x,7);pieceMesh('p',0xf1dfbd,x,6);pieceMesh('p',0x3d2856,x,1);pieceMesh(order[x],0x3d2856,x,0)}turn='w';selected=null;statusEl.textContent="White's turn"}setup();
-function select(p){if(selected===p){selected=null;statusEl.textContent=`${turn==='w'?'White':'Black'}'s turn`;return}if(p.userData.colorSide!==turn)return;selected=p;statusEl.textContent=`${turn==='w'?'White':'Black'}: ${glyph[p.userData.type]} selected — click a destination`}
-function move(squareObj){const hit=squareObj.userData,src=selected.userData;if(Math.abs(hit.x-src.x)+Math.abs(hit.z-src.z)>2)return;selected.position.set((hit.x-3.5)*square,.05,(hit.z-3.5)*square);src.x=hit.x;src.z=hit.z;turn=turn==='w'?'b':'w';selected=null;statusEl.textContent=`${turn==='w'?'White':'Black'}'s turn`}
-renderer.domElement.addEventListener('pointerdown',e=>{mouse.x=e.clientX/innerWidth*2-1;mouse.y=-(e.clientY/innerHeight)*2+1;ray.setFromCamera(mouse,camera);const hits=ray.intersectObjects([...pieces.children,...board.children],true);if(!hits.length)return;let o=hits[0].object;while(o.parent&&o.parent!==pieces&&o.parent!==board)o=o.parent;if(o.parent===pieces){select(o);return}if(selected&&o.parent===board)move(o)});document.getElementById('reset').onclick=setup;
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();
-</script></body></html>
+import {Chess} from 'https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm';
+
+const statusEl=document.getElementById('status'),thinkingEl=document.getElementById('thinking'),lastMoveEl=document.getElementById('lastMove'),qualityEl=document.getElementById('quality'),difficultyEl=document.getElementById('difficulty');
+const app=document.getElementById('app');
+const game=new Chess();
+let selectedSquare=null,locked=false,animating=false;
+const square=1.15,boardGroup=new THREE.Group(),piecesGroup=new THREE.Group(),markersGroup=new THREE.Group();
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x07040d);scene.fog=new THREE.Fog(0x07040d,17,34);
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,.1,100);camera.position.set(0,12.8,13.5);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;app.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,0,0);controls.enableDamping=true;controls.minDistance=8;controls.maxDistance=22;
+scene.add(new THREE.HemisphereLight(0x9b78c4,0x140d1d,2.1));const key=new THREE.DirectionalLight(0xffe7c4,4.2);key.position.set(5,13,7);key.castShadow=true;key.shadow.mapSize.set(2048,2048);scene.add(key);
+const rim=new THREE.PointLight(0x7c43ff,20,18);rim.position.set(-5,5,-4);scene.add(rim);
+scene.add(boardGroup,piecesGroup,markersGroup);
+const tileMeshes=[];
+for(let row=0;row<8;row++)for(let col=0;col<8;col++){const tile=new THREE.Mesh(new THREE.BoxGeometry(square,.24,square),new THREE.MeshStandardMaterial({color:(row+col)%2?0x2b1c39:0xb9a2cc,roughness:.72,metalness:.08}));tile.position.set((col-3.5)*square,0,(row-3.5)*square);tile.receiveShadow=true;tile.userData={row,col,squareName:String.fromCharCode(97+col)+(8-row)};boardGroup.add(tile);tileMeshes.push(tile)}
+const base=new THREE.Mesh(new THREE.BoxGeometry(10.35,.65,10.35),new THREE.MeshStandardMaterial({color:0x100918,metalness:.5,roughness:.38}));base.position.y=-.42;base.receiveShadow=true;scene.add(base);
+const inner=new THREE.Mesh(new THREE.BoxGeometry(9.65,.12,9.65),new THREE.MeshStandardMaterial({color:0x22142d,metalness:.25,roughness:.5}));inner.position.y=-.06;scene.add(inner);
+
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
+const pieceValues={p:100,n:320,b:330,r:500,q:900,k:20000};
+const difficulty={amateur:{depth:1,random:0.30},professional:{depth:2,random:0.07},expert:{depth:3,random:0.015}};
+const robeColors={w:0xd9c6ed,b:0x3a2552};
+const accentColors={w:0xf0d48b,b:0x8c59d8};
+const roleNames={p:'Apprentice',n:'Rider',b:'Seer',r:'Guardian',q:'Archmage',k:'High Wizard'};
+
+function mat(color,metal=.15,rough=.5){return new THREE.MeshStandardMaterial({color,metalness:metal,roughness:rough})}
+function makeWizard(piece,squareName){
+ const color=robeColors[piece.color],accent=accentColors[piece.color],g=new THREE.Group();g.userData={square:squareName,color:piece.color,type:piece.type};
+ const robe=new THREE.Mesh(new THREE.ConeGeometry(piece.type==='p'?.28:.38,piece.type==='p'?.72:1.0,24),mat(color,.18,.48));robe.position.y=piece.type==='p'?.45:.58;robe.castShadow=true;g.add(robe);
+ const belt=new THREE.Mesh(new THREE.CylinderGeometry(piece.type==='p'?.25:.35,piece.type==='p'?.25:.35,.09,24),mat(accent,.35,.3));belt.position.y=piece.type==='p'?.65:.88;g.add(belt);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(piece.type==='p'?.24:.29,24,18),mat(piece.color==='w'?0xf0c9a7:0x9c674f,.05,.55));head.position.y=piece.type==='p'?.93:1.22;head.castShadow=true;g.add(head);
+ const brim=new THREE.Mesh(new THREE.CylinderGeometry(piece.type==='p'?.28:.38,piece.type==='p'?.28:.38,.07,24),mat(accent,.2,.4));brim.position.y=piece.type==='p'?1.15:1.53;g.add(brim);
+ const hat=new THREE.Mesh(new THREE.ConeGeometry(piece.type==='p'?.2:.27,piece.type==='p'?.5:.58,24),mat(color,.2,.42));hat.position.y=piece.type==='p'?1.38:1.83;hat.rotation.z=piece.color==='w'?-.08:.08;g.add(hat);
+ const orb=new THREE.Mesh(new THREE.SphereGeometry(.07,16,12),new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:2.5}));orb.position.set(0,piece.type==='p'?1.62:2.12,0);g.add(orb);
+ if(piece.type!=='p'){
+  const staff=new THREE.Mesh(new THREE.CylinderGeometry(.035,.05,.95,10),mat(0x5d3d27,.15,.65));staff.position.set(.38,.55,0);staff.rotation.z=-.18;staff.castShadow=true;g.add(staff);
+  const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.105),new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:1.8,metalness:.15,roughness:.2}));crystal.position.set(.47,1.05,0);g.add(crystal);
+ }
+ if(piece.type==='k'||piece.type==='q'){
+  for(let i=0;i<3;i++){const c=new THREE.Mesh(new THREE.TorusGeometry(.19,.025,8,20),mat(accent,.5,.25));c.rotation.x=Math.PI/2;c.position.y=piece.type==='k'?2.03+i*.06:1.94+i*.05;g.add(c)}
+ }
+ if(piece.type==='b'){
+  const eye=new THREE.Mesh(new THREE.SphereGeometry(.045,10,8),new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:3}));eye.position.set(0,1.24,.275);g.add(eye)
+ }
+ if(piece.type==='n'){
+  const ear1=new THREE.Mesh(new THREE.ConeGeometry(.08,.22,10),mat(color,.1,.5));ear1.position.set(-.17,1.48,.02);ear1.rotation.z=-.35;g.add(ear1);const ear2=ear1.clone();ear2.position.x=.17;ear2.rotation.z=.35;g.add(ear2)
+ }
+ g.scale.setScalar(piece.type==='p'?.82:1);return g;
+}
+function coordTo3D(s){const col=s.charCodeAt(0)-97,row=8-Number(s[1]);return new THREE.Vector3((col-3.5)*square,.08,(row-3.5)*square)}
+function clearGroup(group){while(group.children.length)group.remove(group.children[0])}
+function drawMarkers(){clearGroup(markersGroup);if(!selectedSquare)return;const moves=game.moves({square:selectedSquare,verbose:true});for(const m of moves){const v=coordTo3D(m.to);const marker=new THREE.Mesh(new THREE.RingGeometry(.12,.19,20),new THREE.MeshBasicMaterial({color:m.captured?0xffb34d:0xd5a8ff,transparent:true,opacity:.9,side:THREE.DoubleSide}));marker.rotation.x=-Math.PI/2;marker.position.copy(v);marker.position.y=.14;marker.userData.destination=m.to;markersGroup.add(marker)}}
+function renderPosition(){clearGroup(piecesGroup);const rows=game.board();rows.forEach((row,r)=>row.forEach((p,c)=>{if(!p)return;const sq=String.fromCharCode(97+c)+(8-r);const w=makeWizard(p,sq);w.position.copy(coordTo3D(sq));w.position.y=.06;w.traverse(o=>{if(o.isMesh)o.castShadow=true});piecesGroup.add(w)}));drawMarkers()}
+function refreshStatus(extra=''){
+ if(game.isCheckmate()){statusEl.textContent=game.turn()==='w'?'Checkmate — the Dark Wizard wins!':'Checkmate — you win!';locked=true;thinkingEl.style.display='none';return}
+ if(game.isDraw()){statusEl.textContent='The magical battle ends in a draw.';locked=true;thinkingEl.style.display='none';return}
+ if(game.turn()==='w'){statusEl.textContent=game.isCheck()?'⚠️ Your King is in check!':'Your turn — choose a wizard';thinkingEl.style.display='none'}else{statusEl.textContent=extra||'Black Wizard CPU';thinkingEl.style.display='block'}
+}
+function resetGame(){game.reset();selectedSquare=null;locked=false;lastMoveEl.textContent='';qualityEl.style.display='none';renderPosition();refreshStatus();}
+
+function evaluate(){if(game.isCheckmate())return game.turn()==='b'?-999999:999999;if(game.isDraw())return 0;let score=0;for(const row of game.board())for(const p of row)if(p){let v=pieceValues[p.type];if(p.type==='p'){const rank=p.color==='b'?p.square?0:0:0}score+=p.color==='b'?v:-v}
+ // mobility and king safety make the CPU less material-greedy
+ const mobility=game.moves().length;score+=(game.turn()==='b'?1:-1)*mobility*2;
+ return score;
+}
+function orderMoves(moves){return moves.sort((a,b)=>((b.captured?pieceValues[b.captured]:0)-(a.captured?pieceValues[a.captured]:0)) + ((b.san.includes('+')?80:0)-(a.san.includes('+')?80:0)))}
+function minimax(depth,alpha,beta,maximizing){if(depth===0||game.isGameOver())return evaluate();let moves=orderMoves(game.moves({verbose:true}));if(maximizing){let best=-Infinity;for(const m of moves){game.move({from:m.from,to:m.to,promotion:m.promotion||'q'});const v=minimax(depth-1,alpha,beta,false);game.undo();if(v>best)best=v;if(best>alpha)alpha=best;if(beta<=alpha)break}return best}else{let best=Infinity;for(const m of moves){game.move({from:m.from,to:m.to,promotion:m.promotion||'q'});const v=minimax(depth-1,alpha,beta,true);game.undo();if(v<best)best=v;if(best<beta)beta=best;if(beta<=alpha)break}return best}}
+function chooseCpuMove(){const cfg=difficulty[difficultyEl.value],moves=orderMoves(game.moves({verbose:true}));if(!moves.length)return null;const scored=[];for(const m of moves){game.move({from:m.from,to:m.to,promotion:m.promotion||'q'});const score=minimax(cfg.depth-1,-Infinity,Infinity,false);game.undo();scored.push({m,score})}
+ scored.sort((a,b)=>b.score-a.score);let chosen=scored[0];if(Math.random()<cfg.random){const pool=scored.slice(0,Math.min(4,scored.length));chosen=pool[Math.floor(Math.random()*pool.length)]}
+ return {move:chosen.m,bestScore:chosen.score,secondScore:scored[1]?.score??chosen.score};}
+async function cpuTurn(){if(game.turn()!=='b'||game.isGameOver())return;locked=true;thinkingEl.style.display='block';statusEl.textContent=`${difficultyEl.value[0].toUpperCase()+difficultyEl.value.slice(1)} dark wizard is calculating…`;await new Promise(r=>setTimeout(r,420));const result=chooseCpuMove();if(!result){refreshStatus();return}const before=game.fen();const move=game.move({from:result.move.from,to:result.move.to,promotion:result.move.promotion||'q'});selectedSquare=null;renderPosition();lastMoveEl.textContent=`CPU move: ${move.san}`;
+ const brilliant=(difficultyEl.value==='expert'&&((move.san.includes('#'))||move.san.includes('+')||(move.captured==='q')||(result.bestScore-result.secondScore>120)));
+ if(brilliant){qualityEl.textContent='✨ BRILLIANT MOVE';qualityEl.style.display='inline-block'}else qualityEl.style.display='none';
+ if(game.isCheckmate()||game.isDraw()){refreshStatus();return}locked=false;refreshStatus();}
+
+renderer.domElement.addEventListener('pointerdown',e=>{if(locked||animating||game.turn()!=='w'||game.isGameOver())return;mouse.x=e.clientX/innerWidth*2-1;mouse.y=-(e.clientY/innerHeight)*2+1;ray.setFromCamera(mouse,camera);const hits=ray.intersectObjects([...piecesGroup.children,...markersGroup.children,...tileMeshes],true);if(!hits.length)return;let o=hits[0].object;while(o.parent&&o.parent!==piecesGroup&&o.parent!==markersGroup)o=o.parent;
+ if(o.parent===markersGroup){const to=o.userData.destination;if(!selectedSquare)return;const legal=game.moves({square:selectedSquare,verbose:true}).find(m=>m.to===to);if(!legal)return;const move=game.move({from:selectedSquare,to:to,promotion:'q'});selectedSquare=null;renderPosition();lastMoveEl.textContent=`You played: ${move.san}`;qualityEl.style.display='none';if(game.isGameOver()){refreshStatus();return}refreshStatus();setTimeout(cpuTurn,180);return}
+ if(o.parent===piecesGroup){const sq=o.userData.square;if(!sq)return;const p=game.get(sq);if(!p||p.color!=='w')return;selectedSquare=selectedSquare===sq?null:sq;drawMarkers();statusEl.textContent=selectedSquare?`${roleNames[p.type]} selected — choose a glowing square`:'Your turn — choose a wizard';return}
+ if(o.userData&&o.userData.squareName&&selectedSquare){const to=o.userData.squareName;const legal=game.moves({square:selectedSquare,verbose:true}).find(m=>m.to===to);if(!legal)return;const move=game.move({from:selectedSquare,to,promotion:'q'});selectedSquare=null;renderPosition();lastMoveEl.textContent=`You played: ${move.san}`;if(game.isGameOver()){refreshStatus();return}refreshStatus();setTimeout(cpuTurn,180)}});
+
+difficultyEl.addEventListener('change',()=>{if(game.history().length===0)refreshStatus();else statusEl.textContent=`CPU difficulty changed to ${difficultyEl.value[0].toUpperCase()+difficultyEl.value.slice(1)}`});document.getElementById('reset').onclick=resetGame;
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+function animate(t){requestAnimationFrame(animate);controls.update();piecesGroup.children.forEach((g,i)=>{g.position.y=.06+Math.sin(t*.002+i)*.012});renderer.render(scene,camera)}
+resetGame();animate(0);
+</script>
+</body>
+</html>
