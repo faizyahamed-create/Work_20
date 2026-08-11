@@ -1,61 +1,107 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wizard Chess</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wizard Chess</title>
 <style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07050a;color:#fff;font-family:Georgia,serif}#app{position:fixed;inset:0}canvas{display:block}
-.hud{position:fixed;top:18px;left:18px;z-index:5;width:300px;padding:18px 20px;border:1px solid #8b6aa9;border-radius:14px;background:rgba(13,9,18,.9);box-shadow:0 8px 35px #0008}.hud h1{margin:0 0 5px;font-size:28px}.sub{font:12px system-ui;color:#b9acc4;margin-bottom:13px}.status{font:14px system-ui;color:#f0e8f5;min-height:20px}.row{display:flex;gap:8px;align-items:center;margin-top:12px}.row label{font:12px system-ui;color:#cfc2d8}.row select,.row button{background:#281934;color:#fff;border:1px solid #9672b7;border-radius:8px;padding:8px 10px;font:13px system-ui}.row button{cursor:pointer}.hint{margin-top:12px;font:12px system-ui;color:#a99caf;line-height:1.5}.thinking{display:none;margin-top:9px;color:#dcb9ff;font:12px system-ui}.move{margin-top:8px;font:12px system-ui;color:#cdbddd}.brilliant{display:none;margin-top:8px;width:max-content;padding:4px 8px;border-radius:999px;background:#4c2d67;color:#f0d8ff;font:11px system-ui}.tip{position:fixed;right:18px;bottom:16px;padding:8px 10px;border-radius:8px;background:#09060dcc;color:#9f94a8;font:11px system-ui}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#09070c;color:#fff;font-family:Georgia,serif}#app{position:fixed;inset:0}canvas{display:block;touch-action:none}
+.hud{position:fixed;top:16px;left:16px;z-index:5;width:290px;padding:16px 18px;border:1px solid #8d6bad;border-radius:14px;background:rgba(12,8,18,.92);box-shadow:0 8px 32px #0009}.hud h1{margin:0 0 4px;font-size:27px}.sub{font:12px system-ui;color:#b9acc4;margin-bottom:11px}.status{font:14px system-ui;color:#f0e8f5;min-height:20px}.row{display:flex;gap:7px;align-items:center;margin-top:10px}.row label{font:12px system-ui;color:#cfc2d8}.row select,.row button{background:#281934;color:#fff;border:1px solid #9672b7;border-radius:8px;padding:8px 9px;font:13px system-ui}.row button{cursor:pointer}.hint{margin-top:10px;font:12px system-ui;color:#aaa0b1;line-height:1.45}.thinking{display:none;margin-top:8px;color:#dcb9ff;font:12px system-ui}.move{margin-top:7px;font:12px system-ui;color:#cdbddd}.brilliant{display:none;margin-top:7px;width:max-content;padding:4px 8px;border-radius:999px;background:#4c2d67;color:#f0d8ff;font:11px system-ui}.tip{position:fixed;right:15px;bottom:14px;padding:8px 10px;border-radius:8px;background:#09060dcc;color:#a9a0ae;font:11px system-ui}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js"}}</script>
 </head>
 <body><div id="app"></div>
-<div class="hud"><h1>Wizard Chess</h1><div class="sub">White Wizard vs Dark Wizard CPU</div><div id="status" class="status">Loading magical board…</div>
-<div class="row"><label>Difficulty</label><select id="difficulty"><option value="amateur">Amateur</option><option value="professional" selected>Professional</option><option value="expert">Expert</option></select><button id="reset">New Game</button></div>
-<div id="thinking" class="thinking">🪄 Dark wizard is thinking…</div><div id="lastMove" class="move"></div><div id="brilliant" class="brilliant">✨ BRILLIANT MOVE</div>
-<div class="hint"><b>Easy controls:</b> click a wizard, then click a glowing square. No board rotation. The board stays steady.</div></div>
-<div class="tip">Click-to-move • Glowing rings = legal moves</div>
+<div class="hud"><h1>Wizard Chess</h1><div class="sub">White Wizards vs Dark Wizard CPU</div><div id="status" class="status">Loading…</div><div class="row"><label>CPU</label><select id="difficulty"><option value="amateur">Amateur</option><option value="professional" selected>Professional</option><option value="expert">Expert</option></select><button id="reset">New Game</button></div><div id="thinking" class="thinking">🪄 Dark wizard is thinking…</div><div id="lastMove" class="move"></div><div id="brilliant" class="brilliant">✨ BRILLIANT MOVE</div><div class="hint"><b>Easy play:</b> click a wizard and click ANY legal highlighted square. You can also drag a wizard directly to a square. The board never rotates.</div></div>
+<div class="tip">Click or drag pieces • Purple rings = legal moves</div>
 <script type="module">
 import * as THREE from 'three';
 import {Chess} from 'https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm';
 
 const $=id=>document.getElementById(id),status=$('status'),thinking=$('thinking'),lastMove=$('lastMove'),brilliant=$('brilliant'),difficulty=$('difficulty');
-const game=new Chess();let selected=null,locked=false;
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x07050a);
-const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.1,100);camera.position.set(0,12.8,13.8);camera.lookAt(0,0,0);
+const game=new Chess();let selected=null,locked=false,drag=null;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x09070c);
+const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.1,100);camera.position.set(0,12.2,13.2);camera.lookAt(0,0,0);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;$('app').appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xb79bd0,0x160d1b,2.2));const key=new THREE.DirectionalLight(0xffe4bd,4.4);key.position.set(5,13,7);key.castShadow=true;key.shadow.mapSize.set(2048,2048);scene.add(key);const glow=new THREE.PointLight(0x8d48d9,25,18);glow.position.set(-5,5,-5);scene.add(glow);
-const S=1.15,board=new THREE.Group(),pieces=new THREE.Group(),markers=new THREE.Group();scene.add(board,pieces,markers);
-const tiles=[];
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){const m=new THREE.MeshStandardMaterial({color:(r+c)%2?0x30223a:0xc7b5c9,roughness:.7,metalness:.05});const t=new THREE.Mesh(new THREE.BoxGeometry(S,.24,S),m);t.position.set((c-3.5)*S,0,(r-3.5)*S);t.receiveShadow=true;t.userData={square:String.fromCharCode(97+c)+(8-r),c,r};board.add(t);tiles.push(t)}
-const base=new THREE.Mesh(new THREE.BoxGeometry(10.4,.72,10.4),new THREE.MeshStandardMaterial({color:0x151019,metalness:.55,roughness:.38}));base.position.y=-.45;base.receiveShadow=true;scene.add(base);
-const trim=new THREE.Mesh(new THREE.BoxGeometry(9.9,.1,9.9),new THREE.MeshStandardMaterial({color:0x46314d,metalness:.35,roughness:.45}));trim.position.y=-.06;scene.add(trim);
-const robe={w:0xd8c8dd,b:0x302331},skin={w:0xd9a986,b:0x744d43},accent={w:0xe5c66f,b:0x7041b0};
-function M(color,metal=.15,rough=.5){return new THREE.MeshStandardMaterial({color,metalness:metal,roughness:rough})}
+scene.add(new THREE.HemisphereLight(0xbda6d2,0x160d1b,2.4));const key=new THREE.DirectionalLight(0xffe4bd,4.8);key.position.set(4,14,7);key.castShadow=true;key.shadow.mapSize.set(2048,2048);scene.add(key);const glow=new THREE.PointLight(0x8d48d9,22,17);glow.position.set(-4,5,-5);scene.add(glow);
+const S=1.18,board=new THREE.Group(),pieces=new THREE.Group(),markers=new THREE.Group();scene.add(board,pieces,markers);const tiles=[];
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){const t=new THREE.Mesh(new THREE.BoxGeometry(S,.26,S),new THREE.MeshStandardMaterial({color:(r+c)%2?0x30243b:0xc9bdc9,roughness:.72,metalness:.05}));t.position.set((c-3.5)*S,0,(r-3.5)*S);t.receiveShadow=true;t.userData={square:String.fromCharCode(97+c)+(8-r),c,r};board.add(t);tiles.push(t)}
+const base=new THREE.Mesh(new THREE.BoxGeometry(10.55,.72,10.55),new THREE.MeshStandardMaterial({color:0x151019,metalness:.5,roughness:.4}));base.position.y=-.46;base.receiveShadow=true;scene.add(base);
+const trim=new THREE.Mesh(new THREE.BoxGeometry(10,.11,10),new THREE.MeshStandardMaterial({color:0x49354f,metalness:.3,roughness:.45}));trim.position.y=-.07;scene.add(trim);
+const robe={w:0xd8c9df,b:0x25202a},skin={w:0xd9a986,b:0x70483f},metal={w:0xe8d9bd,b:0x3d3742},accent={w:0xe5c66f,b:0x713fc1},wood=0x5b3a25;
+function M(color,metalness=.15,rough=.5){return new THREE.MeshStandardMaterial({color,metalness:metalness,roughness:rough})}
+function addMesh(g,geo,material,x=0,y=0,z=0){const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);m.castShadow=true;g.add(m);return m}
 function wizard(p,sq){
- const g=new THREE.Group();g.userData={square:sq};const isPawn=p.type==='p',scale=isPawn?.83:1;
- const body=new THREE.Mesh(new THREE.ConeGeometry(isPawn?.28:.4,isPawn?.78:1.05,24),M(robe[p.color],.2,.55));body.position.y=isPawn?.43:.57;body.castShadow=true;g.add(body);
- const belt=new THREE.Mesh(new THREE.CylinderGeometry(isPawn?.25:.36,isPawn?.25:.36,.1,24),M(accent[p.color],.45,.3));belt.position.y=isPawn?.72:.91;g.add(belt);
- const head=new THREE.Mesh(new THREE.SphereGeometry(isPawn?.22:.29,24,18),M(skin[p.color],.03,.58));head.position.y=isPawn?.95:1.25;head.castShadow=true;g.add(head);
- const brim=new THREE.Mesh(new THREE.CylinderGeometry(isPawn?.29:.39,isPawn?.29:.39,.08,24),M(accent[p.color],.2,.45));brim.position.y=isPawn?1.15:1.56;g.add(brim);
- const hat=new THREE.Mesh(new THREE.ConeGeometry(isPawn?.2:.29,isPawn?.48:.62,24),M(robe[p.color],.2,.5));hat.position.y=isPawn?1.39:1.86;hat.rotation.z=p.color==='w'?.06:-.06;g.add(hat);
- const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.085),new THREE.MeshStandardMaterial({color:accent[p.color],emissive:accent[p.color],emissiveIntensity:2.3,metalness:.25,roughness:.2}));crystal.position.set(0,isPawn?1.65:2.15,0);g.add(crystal);
- if(!isPawn){const staff=new THREE.Mesh(new THREE.CylinderGeometry(.035,.055,1.05,10),M(0x5a3b27,.1,.65));staff.position.set(.39,.58,0);staff.rotation.z=-.15;staff.castShadow=true;g.add(staff);const orb=crystal.clone();orb.scale.set(1.35,1.35,1.35);orb.position.set(.48,1.15,0);g.add(orb)}
- if(p.type==='k'||p.type==='q'){for(let i=0;i<3;i++){const ring=new THREE.Mesh(new THREE.TorusGeometry(.18,.025,8,20),M(accent[p.color],.5,.25));ring.rotation.x=Math.PI/2;ring.position.y=(p.type==='k'?2.06:1.98)+i*.055;g.add(ring)}}
- if(p.type==='r'){const shoulder=new THREE.Mesh(new THREE.BoxGeometry(.58,.12,.22),M(accent[p.color],.3,.35));shoulder.position.y=1.02;g.add(shoulder)}
- if(p.type==='n'){for(const x of [-.16,.16]){const ear=new THREE.Mesh(new THREE.ConeGeometry(.075,.22,10),M(robe[p.color],.15,.5));ear.position.set(x,1.5,0);ear.rotation.z=x<0?-.35:.35;g.add(ear)}}
- g.scale.setScalar(scale);g.position.copy(pos(sq));g.position.y=.08;return g;
+ const g=new THREE.Group();g.userData={square:sq};const C=p.color,isPawn=p.type==='p';
+ // Distinct fantasy silhouettes for every chess role.
+ if(p.type==='p'){
+  addMesh(g,new THREE.CylinderGeometry(.22,.34,.55,12),M(robe[C],.12,.6),0,.34,0);
+  addMesh(g,new THREE.SphereGeometry(.23,18,14),M(skin[C],.02,.6),0,.78,0);
+  addMesh(g,new THREE.ConeGeometry(.34,.48,8),M(robe[C],.15,.55),0,1.13,0);
+  addMesh(g,new THREE.CylinderGeometry(.30,.30,.06,16),M(accent[C],.35,.3),0,.91,0);
+  addMesh(g,new THREE.CylinderGeometry(.035,.045,.65,8),M(wood,.05,.7),.27,.48,0).rotation.z=-.25;
+ }else if(p.type==='n'){
+  addMesh(g,new THREE.CylinderGeometry(.28,.42,.75,12),M(robe[C],.15,.55),0,.43,0);
+  addMesh(g,new THREE.CylinderGeometry(.30,.30,.12,12),M(metal[C],.5,.3),0,.82,0);
+  // horse head / mane silhouette
+  addMesh(g,new THREE.ConeGeometry(.32,.72,6),M(robe[C],.18,.5),0,1.22,.02).rotation.z=-.18;
+  addMesh(g,new THREE.BoxGeometry(.30,.38,.20),M(metal[C],.45,.3),0,1.55,.05).rotation.x=-.15;
+  addMesh(g,new THREE.ConeGeometry(.09,.22,6),M(metal[C],.4,.3),-.13,1.78,.04).rotation.z=-.3;
+  addMesh(g,new THREE.ConeGeometry(.09,.22,6),M(metal[C],.4,.3),.13,1.78,.04).rotation.z=.3;
+  addMesh(g,new THREE.CylinderGeometry(.035,.045,.9,8),M(wood,.05,.7),.42,.65,0).rotation.z=-.12;
+ }else if(p.type==='b'){
+  addMesh(g,new THREE.ConeGeometry(.34,.95,16),M(robe[C],.18,.5),0,.52,0);
+  addMesh(g,new THREE.SphereGeometry(.27,18,14),M(skin[C],.02,.6),0,1.18,0);
+  addMesh(g,new THREE.ConeGeometry(.36,.72,16),M(robe[C],.18,.5),0,1.62,0);
+  addMesh(g,new THREE.TorusGeometry(.30,.045,10,24),M(accent[C],.4,.3),0,1.26,0).rotation.x=Math.PI/2;
+  addMesh(g,new THREE.CylinderGeometry(.035,.05,1.15,8),M(wood,.05,.7),.42,.7,0).rotation.z=-.08;
+ }else if(p.type==='r'){
+  addMesh(g,new THREE.CylinderGeometry(.42,.50,.9,12),M(robe[C],.25,.48),0,.5,0);
+  addMesh(g,new THREE.BoxGeometry(.72,.25,.45),M(metal[C],.6,.3),0,1.02,0);
+  addMesh(g,new THREE.BoxGeometry(.48,.55,.18),M(metal[C],.6,.28),0,1.42,0);
+  // shield
+  addMesh(g,new THREE.CylinderGeometry(.28,.28,.08,8),M(accent[C],.45,.25),.42,.85,.05).rotation.z=Math.PI/2;
+  addMesh(g,new THREE.CylinderGeometry(.04,.05,1.0,8),M(wood,.05,.7),-.42,.7,0).rotation.z=.08;
+ }else if(p.type==='q'){
+  addMesh(g,new THREE.ConeGeometry(.43,.95,18),M(robe[C],.18,.48),0,.54,0);
+  addMesh(g,new THREE.CylinderGeometry(.36,.36,.12,18),M(accent[C],.45,.28),0,1.05,0);
+  addMesh(g,new THREE.SphereGeometry(.28,20,16),M(skin[C],.02,.58),0,1.34,0);
+  addMesh(g,new THREE.ConeGeometry(.43,.7,18),M(robe[C],.18,.48),0,1.78,0);
+  // tall crown
+  for(let i=-2;i<=2;i++)addMesh(g,new THREE.ConeGeometry(.055,.32,8),M(accent[C],.55,.22),i*.13,2.22,0);
+  addMesh(g,new THREE.CylinderGeometry(.04,.055,1.2,8),M(wood,.05,.7),.46,.72,0).rotation.z=-.08;
+ }else if(p.type==='k'){
+  addMesh(g,new THREE.CylinderGeometry(.46,.54,1.05,16),M(robe[C],.22,.48),0,.58,0);
+  addMesh(g,new THREE.BoxGeometry(.82,.2,.52),M(metal[C],.6,.28),0,1.16,0);
+  addMesh(g,new THREE.SphereGeometry(.29,20,16),M(skin[C],.02,.58),0,1.48,0);
+  addMesh(g,new THREE.ConeGeometry(.48,.65,16),M(robe[C],.2,.48),0,1.88,0);
+  // cross crown/staff on top
+  addMesh(g,new THREE.BoxGeometry(.12,.55,.12),M(accent[C],.6,.2),0,2.37,0);
+  addMesh(g,new THREE.BoxGeometry(.42,.11,.12),M(accent[C],.6,.2),0,2.38,0);
+  addMesh(g,new THREE.CylinderGeometry(.04,.055,1.2,8),M(wood,.05,.7),.48,.72,0).rotation.z=-.08;
+ }
+ // glowing gem + soft magical aura, common but not identical
+ const gem=addMesh(g,new THREE.OctahedronGeometry(.08),new THREE.MeshStandardMaterial({color:accent[C],emissive:accent[C],emissiveIntensity:2.5,metalness:.2,roughness:.2}),0,isPawn?1.5:2.08,.02);
+ gem.userData.gem=true;g.scale.setScalar(isPawn?.9:1);g.position.copy(pos(sq));g.position.y=.1;return g;
 }
-function pos(sq){const c=sq.charCodeAt(0)-97,r=8-Number(sq[1]);return new THREE.Vector3((c-3.5)*S,.08,(r-3.5)*S)}
+function pos(sq){const c=sq.charCodeAt(0)-97,r=8-Number(sq[1]);return new THREE.Vector3((c-3.5)*S,.1,(r-3.5)*S)}
 function clear(g){while(g.children.length)g.remove(g.children[0])}
-function draw(){clear(pieces);clear(markers);for(const row of game.board())for(const p of row)if(p){const sq=p.square;pieces.add(wizard(p,sq))}if(selected){for(const m of game.moves({square:selected,verbose:true})){const ring=new THREE.Mesh(new THREE.RingGeometry(.13,.21,24),new THREE.MeshBasicMaterial({color:m.captured?0xff9f45:0xd7a8ff,transparent:true,opacity:.95,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.copy(pos(m.to));ring.position.y=.15;ring.userData.to=m.to;markers.add(ring)}}}
-function text(){if(game.isCheckmate()){status.textContent=game.turn()==='w'?'Checkmate — Dark Wizard wins!':'Checkmate — You win!';locked=true;thinking.style.display='none';return}if(game.isDraw()){status.textContent='Draw — the magical battle ends.';locked=true;return}if(game.turn()==='w'){status.textContent=game.inCheck()?'⚠️ Your King is in check!':'Your turn — choose a wizard';thinking.style.display='none'}else{status.textContent='Dark Wizard CPU';thinking.style.display='block'}}
-function reset(){game.reset();selected=null;locked=false;lastMove.textContent='';brilliant.style.display='none';draw();text()}$('reset').onclick=reset;
+function draw(){clear(pieces);clear(markers);for(const row of game.board())for(const p of row)if(p)pieces.add(wizard(p,p.square));if(selected){for(const m of game.moves({square:selected,verbose:true})){const ring=new THREE.Mesh(new THREE.RingGeometry(.14,.24,24),new THREE.MeshBasicMaterial({color:m.captured?0xff9d42:0xd7a8ff,transparent:true,opacity:.95,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.copy(pos(m.to));ring.position.y=.17;ring.userData.to=m.to;markers.add(ring)}}}
+function text(){if(game.isCheckmate()){status.textContent=game.turn()==='w'?'Checkmate — Dark Wizard wins!':'Checkmate — You win!';locked=true;thinking.style.display='none';return}if(game.isDraw()){status.textContent='Draw — the magical battle ends.';locked=true;thinking.style.display='none';return}if(game.turn()==='w'){status.textContent=game.inCheck()?'⚠️ Your King is in check!':'Your turn — click or drag a wizard';thinking.style.display='none'}else{status.textContent='Dark Wizard CPU';thinking.style.display='block'}}
+function reset(){game.reset();selected=null;locked=false;drag=null;lastMove.textContent='';brilliant.style.display='none';draw();text()}$('reset').onclick=reset;
+// Lightweight browser chess AI. Black is the CPU.
 const val={p:100,n:320,b:330,r:500,q:900,k:20000};
-function evaluate(){if(game.isCheckmate())return game.turn()==='b'?999999:-999999;if(game.isDraw())return 0;let score=0;for(const row of game.board())for(const p of row)if(p)score+=(p.color==='b'?1:-1)*val[p.type];score+=(game.moves().length)*(game.turn()==='b'?1:-1)*2;return score}
+function evaluate(){if(game.isCheckmate())return game.turn()==='b'?999999:-999999;if(game.isDraw())return 0;let score=0;for(const row of game.board())for(const p of row)if(p)score+=(p.color==='b'?1:-1)*val[p.type];return score}
 function search(depth,a,b,max){if(depth===0||game.isGameOver())return evaluate();const ms=game.moves({verbose:true});if(max){let best=-1e9;for(const m of ms){game.move(m);best=Math.max(best,search(depth-1,a,b,false));game.undo();a=Math.max(a,best);if(b<=a)break}return best}else{let best=1e9;for(const m of ms){game.move(m);best=Math.min(best,search(depth-1,a,b,true));game.undo();b=Math.min(b,best);if(b<=a)break}return best}}
-function cpuPick(){const cfg={amateur:[1,.32],professional:[2,.08],expert:[3,.015]}[difficulty.value],ms=game.moves({verbose:true}),scores=[];for(const m of ms){game.move(m);const score=search(cfg[0]-1,-1e9,1e9,false);game.undo();scores.push({m,score})}scores.sort((a,b)=>b.score-a.score);let pick=scores[0];if(Math.random()<cfg[1])pick=scores[Math.floor(Math.random()*Math.min(4,scores.length))];return {pick,margin:pick.score-(scores[1]?.score??pick.score)}}
+function cpuPick(){const cfg={amateur:[1,.38],professional:[2,.09],expert:[3,.015]}[difficulty.value],ms=game.moves({verbose:true}),scores=[];for(const m of ms){game.move(m);const score=search(cfg[0]-1,-1e9,1e9,false);game.undo();scores.push({m,score})}scores.sort((a,b)=>b.score-a.score);let pick=scores[0];if(Math.random()<cfg[1])pick=scores[Math.floor(Math.random()*Math.min(4,scores.length))];return {pick,margin:pick.score-(scores[1]?.score??pick.score)}}
 async function cpu(){if(game.turn()!=='b'||game.isGameOver())return;locked=true;text();await new Promise(r=>setTimeout(r,550));const x=cpuPick();const mv=game.move(x.pick.m);selected=null;draw();lastMove.textContent='CPU: '+mv.san;brilliant.style.display=(difficulty.value==='expert'&&(x.margin>80||mv.san.includes('#')||mv.san.includes('+')||mv.captured==='q'))?'block':'none';locked=false;text()}
-const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();renderer.domElement.addEventListener('pointerdown',async e=>{if(locked||game.turn()!=='w'||game.isGameOver())return;mouse.x=e.clientX/innerWidth*2-1;mouse.y=-(e.clientY/innerHeight)*2+1;ray.setFromCamera(mouse,camera);const hits=ray.intersectObjects([...pieces.children,...markers.children,...tiles],true);if(!hits.length)return;let o=hits[0].object;while(o.parent&&o.parent!==pieces)o=o.parent;if(o.parent===markers){const to=o.userData.to;if(selected){const legal=game.moves({square:selected,verbose:true}).find(m=>m.to===to);if(legal){const mv=game.move({from:selected,to,promotion:'q'});lastMove.textContent='You: '+mv.san;selected=null;draw();text();setTimeout(cpu,180)} }return}if(o.parent===pieces){const sq=o.userData.square;selected=game.moves({square:sq}).length?sq:selected;draw();return}if(o.userData.square&&selected){const legal=game.moves({square:selected,verbose:true}).find(m=>m.to===o.userData.square);if(legal){const mv=game.move({from:selected,to:o.userData.square,promotion:'q'});lastMove.textContent='You: '+mv.san;selected=null;draw();text();setTimeout(cpu,180)}}});
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2(),plane=new THREE.Plane(new THREE.Vector3(0,1,0),-.02),hitPoint=new THREE.Vector3();
+function squareFromPoint(p){const c=Math.round(p.x/S+3.5),r=Math.round(p.z/S+3.5);if(c<0||c>7||r<0||r>7)return null;return String.fromCharCode(97+c)+(8-r)}
+function pointerToBoard(e){mouse.x=e.clientX/innerWidth*2-1;mouse.y=-(e.clientY/innerHeight)*2+1;ray.setFromCamera(mouse,camera);return ray.ray.intersectPlane(plane,hitPoint)?squareFromPoint(hitPoint):null}
+function selectPiece(sq){if(game.moves({square:sq}).length===0)return;selected=sq;draw();status.textContent='Choose a glowing square — or drag here';}
+function makeMove(to){if(!selected)return false;const legal=game.moves({square:selected,verbose:true}).find(m=>m.to===to);if(!legal)return false;const mv=game.move({from:selected,to,promotion:'q'});lastMove.textContent='You: '+mv.san;selected=null;draw();text();setTimeout(cpu,180);return true}
+renderer.domElement.addEventListener('pointerdown',e=>{if(locked||game.turn()!=='w'||game.isGameOver())return;const sq=pointerToBoard(e);if(!sq)return;const hitSq=sq;const piece=game.get(hitSq);if(piece&&piece.color==='w'){selectPiece(hitSq);drag={from:hitSq,id:e.pointerId,moved:false};renderer.domElement.setPointerCapture(e.pointerId);return}if(selected)makeMove(hitSq)});
+renderer.domElement.addEventListener('pointermove',e=>{if(!drag||locked)return;const sq=pointerToBoard(e);if(sq&&sq!==drag.from)drag.moved=true});
+renderer.domElement.addEventListener('pointerup',e=>{if(!drag)return;const d=drag;drag=null;renderer.domElement.releasePointerCapture?.(e.pointerId);if(d.moved){const sq=pointerToBoard(e);if(sq&&!makeMove(sq)){selected=d.from;draw();status.textContent='That wizard cannot move there — choose a glowing square'}}});
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
-reset();function animate(t){requestAnimationFrame(animate);pieces.children.forEach((g,i)=>{g.position.y=.08+Math.sin(t*.0015+i)*.008});renderer.render(scene,camera)}animate(0);
+reset();function animate(t){requestAnimationFrame(animate);pieces.children.forEach((g,i)=>{g.position.y=.1+Math.sin(t*.0013+i)*.006;g.rotation.y=Math.sin(t*.0008+i)*.012;const gem=g.children.find(o=>o.userData?.gem);if(gem)gem.rotation.y=t*.0015+i});renderer.render(scene,camera)}animate(0);
 </script></body></html>
