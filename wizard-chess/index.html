@@ -1,116 +1,61 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wizard Chess — Human vs CPU</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wizard Chess</title>
 <style>
-html,body{margin:0;height:100%;overflow:hidden;background:#07040d;color:#eee;font-family:Georgia,serif}#app{position:fixed;inset:0}canvas{display:block}
-.hud{position:fixed;top:18px;left:18px;z-index:5;width:285px;padding:17px 19px;border:1px solid #8064a9;border-radius:14px;background:rgba(10,6,20,.88);backdrop-filter:blur(10px);box-shadow:0 0 35px rgba(123,75,180,.28)}
-h1{margin:0 0 5px;font-size:27px;letter-spacing:1px}.sub{font-family:system-ui,sans-serif;font-size:12px;color:#a99abb;margin-bottom:12px}.status{font-family:system-ui,sans-serif;font-size:14px;color:#eadff5;min-height:20px}.hint{margin-top:8px;font:12px system-ui,sans-serif;color:#a99abb;line-height:1.45}
-.controls{display:flex;gap:8px;align-items:center;margin-top:12px}.controls label{font:12px system-ui,sans-serif;color:#cfc3e8}.controls select,button{padding:8px 10px;border:1px solid #8f6bc1;border-radius:8px;background:#25153c;color:#fff;font:13px system-ui,sans-serif}button{cursor:pointer}button:hover{background:#35204f}.move{margin-top:9px;font:12px system-ui,sans-serif;color:#c8b8d9}.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#3b2455;color:#e7d5ff;font:11px system-ui,sans-serif;margin-top:6px}
-#thinking{display:none;margin-top:8px;color:#d8baff;font:12px system-ui,sans-serif}.legend{position:fixed;right:18px;bottom:16px;z-index:5;font:11px system-ui,sans-serif;color:#9686a9;background:rgba(8,4,14,.7);padding:8px 10px;border-radius:8px}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07050a;color:#fff;font-family:Georgia,serif}#app{position:fixed;inset:0}canvas{display:block}
+.hud{position:fixed;top:18px;left:18px;z-index:5;width:300px;padding:18px 20px;border:1px solid #8b6aa9;border-radius:14px;background:rgba(13,9,18,.9);box-shadow:0 8px 35px #0008}.hud h1{margin:0 0 5px;font-size:28px}.sub{font:12px system-ui;color:#b9acc4;margin-bottom:13px}.status{font:14px system-ui;color:#f0e8f5;min-height:20px}.row{display:flex;gap:8px;align-items:center;margin-top:12px}.row label{font:12px system-ui;color:#cfc2d8}.row select,.row button{background:#281934;color:#fff;border:1px solid #9672b7;border-radius:8px;padding:8px 10px;font:13px system-ui}.row button{cursor:pointer}.hint{margin-top:12px;font:12px system-ui;color:#a99caf;line-height:1.5}.thinking{display:none;margin-top:9px;color:#dcb9ff;font:12px system-ui}.move{margin-top:8px;font:12px system-ui;color:#cdbddd}.brilliant{display:none;margin-top:8px;width:max-content;padding:4px 8px;border-radius:999px;background:#4c2d67;color:#f0d8ff;font:11px system-ui}.tip{position:fixed;right:18px;bottom:16px;padding:8px 10px;border-radius:8px;background:#09060dcc;color:#9f94a8;font:11px system-ui}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js"}}</script>
 </head>
-<body>
-<div id="app"></div>
-<div class="hud">
-<h1>Wizard Chess</h1><div class="sub">You are the White wizard • Black is the CPU</div>
-<div id="status" class="status">Preparing the magical board…</div>
-<div class="controls"><label for="difficulty">CPU</label><select id="difficulty"><option value="amateur">Amateur</option><option value="professional" selected>Professional</option><option value="expert">Expert</option></select><button id="reset">New Game</button></div>
-<div id="thinking">🪄 The dark wizard is thinking…</div><div id="lastMove" class="move"></div><div id="quality" class="badge" style="display:none"></div>
-<div class="hint">Click a wizard, then click its destination. Drag to orbit • Scroll to zoom.</div>
-</div>
-<div class="legend">⚪ White wizard army &nbsp; ⚫ Dark wizard army</div>
+<body><div id="app"></div>
+<div class="hud"><h1>Wizard Chess</h1><div class="sub">White Wizard vs Dark Wizard CPU</div><div id="status" class="status">Loading magical board…</div>
+<div class="row"><label>Difficulty</label><select id="difficulty"><option value="amateur">Amateur</option><option value="professional" selected>Professional</option><option value="expert">Expert</option></select><button id="reset">New Game</button></div>
+<div id="thinking" class="thinking">🪄 Dark wizard is thinking…</div><div id="lastMove" class="move"></div><div id="brilliant" class="brilliant">✨ BRILLIANT MOVE</div>
+<div class="hint"><b>Easy controls:</b> click a wizard, then click a glowing square. No board rotation. The board stays steady.</div></div>
+<div class="tip">Click-to-move • Glowing rings = legal moves</div>
 <script type="module">
 import * as THREE from 'three';
-import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/controls/OrbitControls.js';
 import {Chess} from 'https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm';
 
-const statusEl=document.getElementById('status'),thinkingEl=document.getElementById('thinking'),lastMoveEl=document.getElementById('lastMove'),qualityEl=document.getElementById('quality'),difficultyEl=document.getElementById('difficulty');
-const app=document.getElementById('app');
-const game=new Chess();
-let selectedSquare=null,locked=false,animating=false;
-const square=1.15,boardGroup=new THREE.Group(),piecesGroup=new THREE.Group(),markersGroup=new THREE.Group();
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x07040d);scene.fog=new THREE.Fog(0x07040d,17,34);
-const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,.1,100);camera.position.set(0,12.8,13.5);
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;app.appendChild(renderer.domElement);
-const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,0,0);controls.enableDamping=true;controls.minDistance=8;controls.maxDistance=22;
-scene.add(new THREE.HemisphereLight(0x9b78c4,0x140d1d,2.1));const key=new THREE.DirectionalLight(0xffe7c4,4.2);key.position.set(5,13,7);key.castShadow=true;key.shadow.mapSize.set(2048,2048);scene.add(key);
-const rim=new THREE.PointLight(0x7c43ff,20,18);rim.position.set(-5,5,-4);scene.add(rim);
-scene.add(boardGroup,piecesGroup,markersGroup);
-const tileMeshes=[];
-for(let row=0;row<8;row++)for(let col=0;col<8;col++){const tile=new THREE.Mesh(new THREE.BoxGeometry(square,.24,square),new THREE.MeshStandardMaterial({color:(row+col)%2?0x2b1c39:0xb9a2cc,roughness:.72,metalness:.08}));tile.position.set((col-3.5)*square,0,(row-3.5)*square);tile.receiveShadow=true;tile.userData={row,col,squareName:String.fromCharCode(97+col)+(8-row)};boardGroup.add(tile);tileMeshes.push(tile)}
-const base=new THREE.Mesh(new THREE.BoxGeometry(10.35,.65,10.35),new THREE.MeshStandardMaterial({color:0x100918,metalness:.5,roughness:.38}));base.position.y=-.42;base.receiveShadow=true;scene.add(base);
-const inner=new THREE.Mesh(new THREE.BoxGeometry(9.65,.12,9.65),new THREE.MeshStandardMaterial({color:0x22142d,metalness:.25,roughness:.5}));inner.position.y=-.06;scene.add(inner);
-
-const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
-const pieceValues={p:100,n:320,b:330,r:500,q:900,k:20000};
-const difficulty={amateur:{depth:1,random:0.30},professional:{depth:2,random:0.07},expert:{depth:3,random:0.015}};
-const robeColors={w:0xd9c6ed,b:0x3a2552};
-const accentColors={w:0xf0d48b,b:0x8c59d8};
-const roleNames={p:'Apprentice',n:'Rider',b:'Seer',r:'Guardian',q:'Archmage',k:'High Wizard'};
-
-function mat(color,metal=.15,rough=.5){return new THREE.MeshStandardMaterial({color,metalness:metal,roughness:rough})}
-function makeWizard(piece,squareName){
- const color=robeColors[piece.color],accent=accentColors[piece.color],g=new THREE.Group();g.userData={square:squareName,color:piece.color,type:piece.type};
- const robe=new THREE.Mesh(new THREE.ConeGeometry(piece.type==='p'?.28:.38,piece.type==='p'?.72:1.0,24),mat(color,.18,.48));robe.position.y=piece.type==='p'?.45:.58;robe.castShadow=true;g.add(robe);
- const belt=new THREE.Mesh(new THREE.CylinderGeometry(piece.type==='p'?.25:.35,piece.type==='p'?.25:.35,.09,24),mat(accent,.35,.3));belt.position.y=piece.type==='p'?.65:.88;g.add(belt);
- const head=new THREE.Mesh(new THREE.SphereGeometry(piece.type==='p'?.24:.29,24,18),mat(piece.color==='w'?0xf0c9a7:0x9c674f,.05,.55));head.position.y=piece.type==='p'?.93:1.22;head.castShadow=true;g.add(head);
- const brim=new THREE.Mesh(new THREE.CylinderGeometry(piece.type==='p'?.28:.38,piece.type==='p'?.28:.38,.07,24),mat(accent,.2,.4));brim.position.y=piece.type==='p'?1.15:1.53;g.add(brim);
- const hat=new THREE.Mesh(new THREE.ConeGeometry(piece.type==='p'?.2:.27,piece.type==='p'?.5:.58,24),mat(color,.2,.42));hat.position.y=piece.type==='p'?1.38:1.83;hat.rotation.z=piece.color==='w'?-.08:.08;g.add(hat);
- const orb=new THREE.Mesh(new THREE.SphereGeometry(.07,16,12),new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:2.5}));orb.position.set(0,piece.type==='p'?1.62:2.12,0);g.add(orb);
- if(piece.type!=='p'){
-  const staff=new THREE.Mesh(new THREE.CylinderGeometry(.035,.05,.95,10),mat(0x5d3d27,.15,.65));staff.position.set(.38,.55,0);staff.rotation.z=-.18;staff.castShadow=true;g.add(staff);
-  const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.105),new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:1.8,metalness:.15,roughness:.2}));crystal.position.set(.47,1.05,0);g.add(crystal);
- }
- if(piece.type==='k'||piece.type==='q'){
-  for(let i=0;i<3;i++){const c=new THREE.Mesh(new THREE.TorusGeometry(.19,.025,8,20),mat(accent,.5,.25));c.rotation.x=Math.PI/2;c.position.y=piece.type==='k'?2.03+i*.06:1.94+i*.05;g.add(c)}
- }
- if(piece.type==='b'){
-  const eye=new THREE.Mesh(new THREE.SphereGeometry(.045,10,8),new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:3}));eye.position.set(0,1.24,.275);g.add(eye)
- }
- if(piece.type==='n'){
-  const ear1=new THREE.Mesh(new THREE.ConeGeometry(.08,.22,10),mat(color,.1,.5));ear1.position.set(-.17,1.48,.02);ear1.rotation.z=-.35;g.add(ear1);const ear2=ear1.clone();ear2.position.x=.17;ear2.rotation.z=.35;g.add(ear2)
- }
- g.scale.setScalar(piece.type==='p'?.82:1);return g;
+const $=id=>document.getElementById(id),status=$('status'),thinking=$('thinking'),lastMove=$('lastMove'),brilliant=$('brilliant'),difficulty=$('difficulty');
+const game=new Chess();let selected=null,locked=false;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x07050a);
+const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.1,100);camera.position.set(0,12.8,13.8);camera.lookAt(0,0,0);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;$('app').appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xb79bd0,0x160d1b,2.2));const key=new THREE.DirectionalLight(0xffe4bd,4.4);key.position.set(5,13,7);key.castShadow=true;key.shadow.mapSize.set(2048,2048);scene.add(key);const glow=new THREE.PointLight(0x8d48d9,25,18);glow.position.set(-5,5,-5);scene.add(glow);
+const S=1.15,board=new THREE.Group(),pieces=new THREE.Group(),markers=new THREE.Group();scene.add(board,pieces,markers);
+const tiles=[];
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){const m=new THREE.MeshStandardMaterial({color:(r+c)%2?0x30223a:0xc7b5c9,roughness:.7,metalness:.05});const t=new THREE.Mesh(new THREE.BoxGeometry(S,.24,S),m);t.position.set((c-3.5)*S,0,(r-3.5)*S);t.receiveShadow=true;t.userData={square:String.fromCharCode(97+c)+(8-r),c,r};board.add(t);tiles.push(t)}
+const base=new THREE.Mesh(new THREE.BoxGeometry(10.4,.72,10.4),new THREE.MeshStandardMaterial({color:0x151019,metalness:.55,roughness:.38}));base.position.y=-.45;base.receiveShadow=true;scene.add(base);
+const trim=new THREE.Mesh(new THREE.BoxGeometry(9.9,.1,9.9),new THREE.MeshStandardMaterial({color:0x46314d,metalness:.35,roughness:.45}));trim.position.y=-.06;scene.add(trim);
+const robe={w:0xd8c8dd,b:0x302331},skin={w:0xd9a986,b:0x744d43},accent={w:0xe5c66f,b:0x7041b0};
+function M(color,metal=.15,rough=.5){return new THREE.MeshStandardMaterial({color,metalness:metal,roughness:rough})}
+function wizard(p,sq){
+ const g=new THREE.Group();g.userData={square:sq};const isPawn=p.type==='p',scale=isPawn?.83:1;
+ const body=new THREE.Mesh(new THREE.ConeGeometry(isPawn?.28:.4,isPawn?.78:1.05,24),M(robe[p.color],.2,.55));body.position.y=isPawn?.43:.57;body.castShadow=true;g.add(body);
+ const belt=new THREE.Mesh(new THREE.CylinderGeometry(isPawn?.25:.36,isPawn?.25:.36,.1,24),M(accent[p.color],.45,.3));belt.position.y=isPawn?.72:.91;g.add(belt);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(isPawn?.22:.29,24,18),M(skin[p.color],.03,.58));head.position.y=isPawn?.95:1.25;head.castShadow=true;g.add(head);
+ const brim=new THREE.Mesh(new THREE.CylinderGeometry(isPawn?.29:.39,isPawn?.29:.39,.08,24),M(accent[p.color],.2,.45));brim.position.y=isPawn?1.15:1.56;g.add(brim);
+ const hat=new THREE.Mesh(new THREE.ConeGeometry(isPawn?.2:.29,isPawn?.48:.62,24),M(robe[p.color],.2,.5));hat.position.y=isPawn?1.39:1.86;hat.rotation.z=p.color==='w'?.06:-.06;g.add(hat);
+ const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.085),new THREE.MeshStandardMaterial({color:accent[p.color],emissive:accent[p.color],emissiveIntensity:2.3,metalness:.25,roughness:.2}));crystal.position.set(0,isPawn?1.65:2.15,0);g.add(crystal);
+ if(!isPawn){const staff=new THREE.Mesh(new THREE.CylinderGeometry(.035,.055,1.05,10),M(0x5a3b27,.1,.65));staff.position.set(.39,.58,0);staff.rotation.z=-.15;staff.castShadow=true;g.add(staff);const orb=crystal.clone();orb.scale.set(1.35,1.35,1.35);orb.position.set(.48,1.15,0);g.add(orb)}
+ if(p.type==='k'||p.type==='q'){for(let i=0;i<3;i++){const ring=new THREE.Mesh(new THREE.TorusGeometry(.18,.025,8,20),M(accent[p.color],.5,.25));ring.rotation.x=Math.PI/2;ring.position.y=(p.type==='k'?2.06:1.98)+i*.055;g.add(ring)}}
+ if(p.type==='r'){const shoulder=new THREE.Mesh(new THREE.BoxGeometry(.58,.12,.22),M(accent[p.color],.3,.35));shoulder.position.y=1.02;g.add(shoulder)}
+ if(p.type==='n'){for(const x of [-.16,.16]){const ear=new THREE.Mesh(new THREE.ConeGeometry(.075,.22,10),M(robe[p.color],.15,.5));ear.position.set(x,1.5,0);ear.rotation.z=x<0?-.35:.35;g.add(ear)}}
+ g.scale.setScalar(scale);g.position.copy(pos(sq));g.position.y=.08;return g;
 }
-function coordTo3D(s){const col=s.charCodeAt(0)-97,row=8-Number(s[1]);return new THREE.Vector3((col-3.5)*square,.08,(row-3.5)*square)}
-function clearGroup(group){while(group.children.length)group.remove(group.children[0])}
-function drawMarkers(){clearGroup(markersGroup);if(!selectedSquare)return;const moves=game.moves({square:selectedSquare,verbose:true});for(const m of moves){const v=coordTo3D(m.to);const marker=new THREE.Mesh(new THREE.RingGeometry(.12,.19,20),new THREE.MeshBasicMaterial({color:m.captured?0xffb34d:0xd5a8ff,transparent:true,opacity:.9,side:THREE.DoubleSide}));marker.rotation.x=-Math.PI/2;marker.position.copy(v);marker.position.y=.14;marker.userData.destination=m.to;markersGroup.add(marker)}}
-function renderPosition(){clearGroup(piecesGroup);const rows=game.board();rows.forEach((row,r)=>row.forEach((p,c)=>{if(!p)return;const sq=String.fromCharCode(97+c)+(8-r);const w=makeWizard(p,sq);w.position.copy(coordTo3D(sq));w.position.y=.06;w.traverse(o=>{if(o.isMesh)o.castShadow=true});piecesGroup.add(w)}));drawMarkers()}
-function refreshStatus(extra=''){
- if(game.isCheckmate()){statusEl.textContent=game.turn()==='w'?'Checkmate — the Dark Wizard wins!':'Checkmate — you win!';locked=true;thinkingEl.style.display='none';return}
- if(game.isDraw()){statusEl.textContent='The magical battle ends in a draw.';locked=true;thinkingEl.style.display='none';return}
- if(game.turn()==='w'){statusEl.textContent=game.isCheck()?'⚠️ Your King is in check!':'Your turn — choose a wizard';thinkingEl.style.display='none'}else{statusEl.textContent=extra||'Black Wizard CPU';thinkingEl.style.display='block'}
-}
-function resetGame(){game.reset();selectedSquare=null;locked=false;lastMoveEl.textContent='';qualityEl.style.display='none';renderPosition();refreshStatus();}
-
-function evaluate(){if(game.isCheckmate())return game.turn()==='b'?-999999:999999;if(game.isDraw())return 0;let score=0;for(const row of game.board())for(const p of row)if(p){let v=pieceValues[p.type];if(p.type==='p'){const rank=p.color==='b'?p.square?0:0:0}score+=p.color==='b'?v:-v}
- // mobility and king safety make the CPU less material-greedy
- const mobility=game.moves().length;score+=(game.turn()==='b'?1:-1)*mobility*2;
- return score;
-}
-function orderMoves(moves){return moves.sort((a,b)=>((b.captured?pieceValues[b.captured]:0)-(a.captured?pieceValues[a.captured]:0)) + ((b.san.includes('+')?80:0)-(a.san.includes('+')?80:0)))}
-function minimax(depth,alpha,beta,maximizing){if(depth===0||game.isGameOver())return evaluate();let moves=orderMoves(game.moves({verbose:true}));if(maximizing){let best=-Infinity;for(const m of moves){game.move({from:m.from,to:m.to,promotion:m.promotion||'q'});const v=minimax(depth-1,alpha,beta,false);game.undo();if(v>best)best=v;if(best>alpha)alpha=best;if(beta<=alpha)break}return best}else{let best=Infinity;for(const m of moves){game.move({from:m.from,to:m.to,promotion:m.promotion||'q'});const v=minimax(depth-1,alpha,beta,true);game.undo();if(v<best)best=v;if(best<beta)beta=best;if(beta<=alpha)break}return best}}
-function chooseCpuMove(){const cfg=difficulty[difficultyEl.value],moves=orderMoves(game.moves({verbose:true}));if(!moves.length)return null;const scored=[];for(const m of moves){game.move({from:m.from,to:m.to,promotion:m.promotion||'q'});const score=minimax(cfg.depth-1,-Infinity,Infinity,false);game.undo();scored.push({m,score})}
- scored.sort((a,b)=>b.score-a.score);let chosen=scored[0];if(Math.random()<cfg.random){const pool=scored.slice(0,Math.min(4,scored.length));chosen=pool[Math.floor(Math.random()*pool.length)]}
- return {move:chosen.m,bestScore:chosen.score,secondScore:scored[1]?.score??chosen.score};}
-async function cpuTurn(){if(game.turn()!=='b'||game.isGameOver())return;locked=true;thinkingEl.style.display='block';statusEl.textContent=`${difficultyEl.value[0].toUpperCase()+difficultyEl.value.slice(1)} dark wizard is calculating…`;await new Promise(r=>setTimeout(r,420));const result=chooseCpuMove();if(!result){refreshStatus();return}const before=game.fen();const move=game.move({from:result.move.from,to:result.move.to,promotion:result.move.promotion||'q'});selectedSquare=null;renderPosition();lastMoveEl.textContent=`CPU move: ${move.san}`;
- const brilliant=(difficultyEl.value==='expert'&&((move.san.includes('#'))||move.san.includes('+')||(move.captured==='q')||(result.bestScore-result.secondScore>120)));
- if(brilliant){qualityEl.textContent='✨ BRILLIANT MOVE';qualityEl.style.display='inline-block'}else qualityEl.style.display='none';
- if(game.isCheckmate()||game.isDraw()){refreshStatus();return}locked=false;refreshStatus();}
-
-renderer.domElement.addEventListener('pointerdown',e=>{if(locked||animating||game.turn()!=='w'||game.isGameOver())return;mouse.x=e.clientX/innerWidth*2-1;mouse.y=-(e.clientY/innerHeight)*2+1;ray.setFromCamera(mouse,camera);const hits=ray.intersectObjects([...piecesGroup.children,...markersGroup.children,...tileMeshes],true);if(!hits.length)return;let o=hits[0].object;while(o.parent&&o.parent!==piecesGroup&&o.parent!==markersGroup)o=o.parent;
- if(o.parent===markersGroup){const to=o.userData.destination;if(!selectedSquare)return;const legal=game.moves({square:selectedSquare,verbose:true}).find(m=>m.to===to);if(!legal)return;const move=game.move({from:selectedSquare,to:to,promotion:'q'});selectedSquare=null;renderPosition();lastMoveEl.textContent=`You played: ${move.san}`;qualityEl.style.display='none';if(game.isGameOver()){refreshStatus();return}refreshStatus();setTimeout(cpuTurn,180);return}
- if(o.parent===piecesGroup){const sq=o.userData.square;if(!sq)return;const p=game.get(sq);if(!p||p.color!=='w')return;selectedSquare=selectedSquare===sq?null:sq;drawMarkers();statusEl.textContent=selectedSquare?`${roleNames[p.type]} selected — choose a glowing square`:'Your turn — choose a wizard';return}
- if(o.userData&&o.userData.squareName&&selectedSquare){const to=o.userData.squareName;const legal=game.moves({square:selectedSquare,verbose:true}).find(m=>m.to===to);if(!legal)return;const move=game.move({from:selectedSquare,to,promotion:'q'});selectedSquare=null;renderPosition();lastMoveEl.textContent=`You played: ${move.san}`;if(game.isGameOver()){refreshStatus();return}refreshStatus();setTimeout(cpuTurn,180)}});
-
-difficultyEl.addEventListener('change',()=>{if(game.history().length===0)refreshStatus();else statusEl.textContent=`CPU difficulty changed to ${difficultyEl.value[0].toUpperCase()+difficultyEl.value.slice(1)}`});document.getElementById('reset').onclick=resetGame;
+function pos(sq){const c=sq.charCodeAt(0)-97,r=8-Number(sq[1]);return new THREE.Vector3((c-3.5)*S,.08,(r-3.5)*S)}
+function clear(g){while(g.children.length)g.remove(g.children[0])}
+function draw(){clear(pieces);clear(markers);for(const row of game.board())for(const p of row)if(p){const sq=p.square;pieces.add(wizard(p,sq))}if(selected){for(const m of game.moves({square:selected,verbose:true})){const ring=new THREE.Mesh(new THREE.RingGeometry(.13,.21,24),new THREE.MeshBasicMaterial({color:m.captured?0xff9f45:0xd7a8ff,transparent:true,opacity:.95,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.copy(pos(m.to));ring.position.y=.15;ring.userData.to=m.to;markers.add(ring)}}}
+function text(){if(game.isCheckmate()){status.textContent=game.turn()==='w'?'Checkmate — Dark Wizard wins!':'Checkmate — You win!';locked=true;thinking.style.display='none';return}if(game.isDraw()){status.textContent='Draw — the magical battle ends.';locked=true;return}if(game.turn()==='w'){status.textContent=game.inCheck()?'⚠️ Your King is in check!':'Your turn — choose a wizard';thinking.style.display='none'}else{status.textContent='Dark Wizard CPU';thinking.style.display='block'}}
+function reset(){game.reset();selected=null;locked=false;lastMove.textContent='';brilliant.style.display='none';draw();text()}$('reset').onclick=reset;
+const val={p:100,n:320,b:330,r:500,q:900,k:20000};
+function evaluate(){if(game.isCheckmate())return game.turn()==='b'?999999:-999999;if(game.isDraw())return 0;let score=0;for(const row of game.board())for(const p of row)if(p)score+=(p.color==='b'?1:-1)*val[p.type];score+=(game.moves().length)*(game.turn()==='b'?1:-1)*2;return score}
+function search(depth,a,b,max){if(depth===0||game.isGameOver())return evaluate();const ms=game.moves({verbose:true});if(max){let best=-1e9;for(const m of ms){game.move(m);best=Math.max(best,search(depth-1,a,b,false));game.undo();a=Math.max(a,best);if(b<=a)break}return best}else{let best=1e9;for(const m of ms){game.move(m);best=Math.min(best,search(depth-1,a,b,true));game.undo();b=Math.min(b,best);if(b<=a)break}return best}}
+function cpuPick(){const cfg={amateur:[1,.32],professional:[2,.08],expert:[3,.015]}[difficulty.value],ms=game.moves({verbose:true}),scores=[];for(const m of ms){game.move(m);const score=search(cfg[0]-1,-1e9,1e9,false);game.undo();scores.push({m,score})}scores.sort((a,b)=>b.score-a.score);let pick=scores[0];if(Math.random()<cfg[1])pick=scores[Math.floor(Math.random()*Math.min(4,scores.length))];return {pick,margin:pick.score-(scores[1]?.score??pick.score)}}
+async function cpu(){if(game.turn()!=='b'||game.isGameOver())return;locked=true;text();await new Promise(r=>setTimeout(r,550));const x=cpuPick();const mv=game.move(x.pick.m);selected=null;draw();lastMove.textContent='CPU: '+mv.san;brilliant.style.display=(difficulty.value==='expert'&&(x.margin>80||mv.san.includes('#')||mv.san.includes('+')||mv.captured==='q'))?'block':'none';locked=false;text()}
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();renderer.domElement.addEventListener('pointerdown',async e=>{if(locked||game.turn()!=='w'||game.isGameOver())return;mouse.x=e.clientX/innerWidth*2-1;mouse.y=-(e.clientY/innerHeight)*2+1;ray.setFromCamera(mouse,camera);const hits=ray.intersectObjects([...pieces.children,...markers.children,...tiles],true);if(!hits.length)return;let o=hits[0].object;while(o.parent&&o.parent!==pieces)o=o.parent;if(o.parent===markers){const to=o.userData.to;if(selected){const legal=game.moves({square:selected,verbose:true}).find(m=>m.to===to);if(legal){const mv=game.move({from:selected,to,promotion:'q'});lastMove.textContent='You: '+mv.san;selected=null;draw();text();setTimeout(cpu,180)} }return}if(o.parent===pieces){const sq=o.userData.square;selected=game.moves({square:sq}).length?sq:selected;draw();return}if(o.userData.square&&selected){const legal=game.moves({square:selected,verbose:true}).find(m=>m.to===o.userData.square);if(legal){const mv=game.move({from:selected,to:o.userData.square,promotion:'q'});lastMove.textContent='You: '+mv.san;selected=null;draw();text();setTimeout(cpu,180)}}});
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
-function animate(t){requestAnimationFrame(animate);controls.update();piecesGroup.children.forEach((g,i)=>{g.position.y=.06+Math.sin(t*.002+i)*.012});renderer.render(scene,camera)}
-resetGame();animate(0);
-</script>
-</body>
-</html>
+reset();function animate(t){requestAnimationFrame(animate);pieces.children.forEach((g,i)=>{g.position.y=.08+Math.sin(t*.0015+i)*.008});renderer.render(scene,camera)}animate(0);
+</script></body></html>
